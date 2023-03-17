@@ -2,6 +2,11 @@ import torch
 import numpy as np
 import torch.nn as nn
 import gc
+import pandas as pd
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import classification_report
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 class LeukemiaClassifier(nn.Module):
     def __init__(self) -> None:
@@ -114,6 +119,23 @@ def accuracy(model, data_loader):
         total += data.shape[0]
     return correct / total
 
+def draw_confusion_matrix(predicted_labels, actual_labels):
+
+    cm = confusion_matrix(actual_labels, predicted_labels)
+    cm_df = pd.DataFrame(cm,
+                     index = ['BENIGN','EARLY','NORMAL', 'PRE', 'PRO'], 
+                     columns = ['BENIGN','EARLY','NORMAL', 'PRE', 'PRO'])
+
+    plt.figure(figsize=(5,4))
+    sns.heatmap(cm_df, annot=True)
+    plt.title('Confusion Matrix')
+    plt.ylabel('Actal Values')
+    plt.xlabel('Predicted Values')
+    plt.show()
+
+def print_model_report(predicted_labels, actual_labels, class_names):
+    print(classification_report(actual_labels, predicted_labels, target_names=class_names))
+
 def train(model, train_dl, val_dl, epochs = 50, initial_lr = 5e-4, bs = 25):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = model.to(device)
@@ -126,6 +148,9 @@ def train(model, train_dl, val_dl, epochs = 50, initial_lr = 5e-4, bs = 25):
 
     print("Training for %d epochs using %s..."%(epochs,device))
 
+    predicted_labels = np.array([])
+    actual_labels = np.array([])
+
     for epoch in range(epochs):
         running_loss = 0.0
         processed = 0
@@ -134,6 +159,12 @@ def train(model, train_dl, val_dl, epochs = 50, initial_lr = 5e-4, bs = 25):
             emb = emb.to(device)
             label = label.to(device)
             out = model(emb)
+
+            softMax = nn.Softmax(dim=1)
+            outputProbabilities = softMax(out)
+            predicted_labels.append(max(outputProbabilities))
+            actual_labels.append(label)
+
             loss = criterion(out, label)
             loss.backward()
             optimizer.step()
@@ -149,5 +180,48 @@ def train(model, train_dl, val_dl, epochs = 50, initial_lr = 5e-4, bs = 25):
             print("Epoch %d |\t Loss: %.2f |\t Training Accuracy: %.2f |\t Validation Accuracy: %.2f"%(epoch+1,train_loss[epoch],train_accuracy[epoch],val_accuracy[epoch]))
             scheduler.step()
 
+    class_names = ['BENIGN','EARLY','NORMAL', 'PRE', 'PRO']
+    draw_confusion_matrix(predicted_labels, actual_labels)
+    print_model_report(predicted_labels, actual_labels, class_names)
+
     torch.save(model.state_dict(), "Trained_Model_Iteration_1")
     return train_loss, train_accuracy, val_accuracy
+
+# from ssl import ALERT_DESCRIPTION_UNRECOGNIZED_NAME
+# import pandas as pd
+# from sklearn.metrics import confusion_matrix
+# from sklearn.metrics import classification_report
+# import matplotlib.pyplot as plt
+# import seaborn as sns
+# import numpy as np
+
+# from numpy.random import seed
+# from numpy.random import randint
+
+# def draw_confusion_matrix(predicted_labels, actual_labels):
+
+#     cm = confusion_matrix(actual_labels, predicted_labels)
+#     cm_df = pd.DataFrame(cm,
+#                      index = ['CLASS1','CLASS2','CLASS3', 'CLASS4', 'CLASS5'], 
+#                      columns = ['CLASS1','CLASS2','CLASS3', 'CLASS4', 'CLASS5'])
+
+#     plt.figure(figsize=(5,4))
+#     sns.heatmap(cm_df, annot=True)
+#     plt.title('Confusion Matrix')
+#     plt.ylabel('Actal Values')
+#     plt.xlabel('Predicted Values')
+#     plt.show()
+
+# def print_model_report(predicted_labels, actual_labels, class_names):
+#     print(classification_report(actual_labels, predicted_labels, target_names=class_names))
+
+# seed(1)
+# pred = randint(0, 5, 50)
+# actu = randint(0, 5, 50)
+
+# predicted_labels = np.array(pred)
+# actual_labels = np.array(actu)
+
+# class_names = ['CLASS1','CLASS2','CLASS3', 'CLASS4', 'CLASS5']
+# draw_confusion_matrix(predicted_labels, actual_labels)
+# print_model_report(predicted_labels, actual_labels, class_names)
